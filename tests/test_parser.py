@@ -1001,14 +1001,3 @@ def test_call_postfix_member():
     }
     """
     assert Parser(input).parse() == "success"
-
-def break_if_invalid():
-    input = """
-    void main() {
-        if (x > 0)x
-            a ==0
-        else 
-            break
-    """
-    assert Parser(input).parse() == "Error on line 4 col 112: break"
-print("HELLO NEW TEST")
