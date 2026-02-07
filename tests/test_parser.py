@@ -475,7 +475,7 @@ def test_complex_program_functions():
 
 def test_complex_nested_loops():
     """Test: Complex nested loops"""
-    result = Parser("void main() { for (int i = 0; i < 10; i++) { for (int j = 0; j < i; j++) { } } }").parse()
+    result = Parser("void main() { for (int i = 0; i < 10; i++) { for (int j = 0; j < i; ++j) { } } }").parse()
     assert result == "success"
 
 def test_complex_control_flow():
@@ -904,9 +904,29 @@ def test_multiple():
     assert Parser(input).parse() == "success"
 def test_multiple2():
     input = "int a,b,c = 2;"
-    assert Parser(input).parse() == "success"
+    assert Parser(input).parse() == "Error on line 1 col 5: ,"
 def test_multiple3():
-    input = "float x = 2.0; x = y = z"
+    input = """
+    void main() {
+    float x = 2.0; x = y = z;
+    }
+    """
+
+    assert Parser(input).parse() == "success"
+def test_prefix_and_postfix():
+    input = """
+    void main() {
+        ++a;
+        a++;
+    }
+    """
+    assert Parser(input).parse() == "success"
+def test_mutiple4():
+    input = """
+    void main() {
+        a || b && c == d + e * f - g / h % i;
+    }
+    """
     assert Parser(input).parse() == "success"
 def test_double_postfix_inc():
     input = """
@@ -981,3 +1001,14 @@ def test_call_postfix_member():
     }
     """
     assert Parser(input).parse() == "success"
+
+def break_if_invalid():
+    input = """
+    void main() {
+        if (x > 0)x
+            a ==0
+        else 
+            break
+    """
+    assert Parser(input).parse() == "Error on line 4 col 112: break"
+print("HELLO NEW TEST")

@@ -95,8 +95,8 @@ block
 
 
 stmt
-    : assignStmt
-    | ifStmt
+    // : assignStmt
+    : ifStmt
     | whileStmt
     | forStmt
     | switchStmt
@@ -107,12 +107,13 @@ stmt
     | block
     ;
 
-assignStmt
-    : lhs ASSIGN expr SEMI
-    ;
+// assignStmt
+//     : lhs ASSIGN expr SEMI
+//     ;
 
 lhs
-    : ID (DOT ID)*
+    : ID (memberAccess)*
+    | postfixExpr memberAccess+
     ;
 
 ifStmt
@@ -140,11 +141,11 @@ forUpdate
     ;
 
 switchStmt
-    : SWITCH LPAREN expr RPAREN LBRACE (switchCase | defaultCase)* RBRACE
+    : SWITCH LPAREN expr RPAREN LBRACE switchCase*  defaultCase? RBRACE
     ;
 
 switchCase
-    : CASE (unaryExpr | INTLIT | ID) COLON (stmt | varDecl)*
+    : CASE expr COLON (stmt | varDecl)*
     ;
 
 defaultCase
@@ -178,7 +179,8 @@ expr
     ;
 
 assignExpr
-    : logicalOrExpr (ASSIGN assignExpr)?
+    : lhs ASSIGN assignExpr
+    | logicalOrExpr
     ;
 
 logicalOrExpr
@@ -211,7 +213,14 @@ unaryExpr
     ;
 
 postfixExpr
-    : primaryExpr (INC | DEC | memberAccess | funcCall)*
+    : primaryExpr postfixPart*
+    ;
+
+postfixPart
+    : memberAccess
+    | funcCall
+    | INC
+    | DEC
     ;
 
 funcCall
