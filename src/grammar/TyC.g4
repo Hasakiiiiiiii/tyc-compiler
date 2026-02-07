@@ -9,19 +9,27 @@ from lexererr import *
 @lexer::members {
 def emit(self):
     tk = self.type
-    if tk == self.UNCLOSE_STRING:       
-        result = super().emit();
-        raise UncloseString(result.text);
+    # Logic to satisfy "String Token Processing" requirements
+    if tk == self.STRINGLIT:
+        # Strip the enclosing double quotes for valid strings
+        self.text = self.text[1:-1]
+        return super().emit()
+    elif tk == self.UNCLOSE_STRING:
+        # Remove opening quote, keep content for error message
+        self.text = self.text[1:]
+        result = super().emit()
+        raise UncloseString(result.text)
     elif tk == self.ILLEGAL_ESCAPE:
-        result = super().emit();
-        raise IllegalEscape(result.text);
+        # Remove opening quote, keep content for error message
+        self.text = self.text[1:]
+        result = super().emit()
+        raise IllegalEscape(result.text)
     elif tk == self.ERROR_CHAR:
-        result = super().emit();
-        raise ErrorToken(result.text); 
+        result = super().emit()
+        raise ErrorToken(result.text) 
     else:
-        return super().emit();
+        return super().emit()
 }
-
 /* =======================
    PARSER RULES
 ======================= */
@@ -37,25 +45,29 @@ decl
     ;
 
 structDecl
-    : STRUCT ID '{' varDecl* '}' ';'
+    : STRUCT ID LBRACE varDecl* RBRACE SEMI
     ;
+
+/* ---- Variable ---- */
 
 varDecl
-    : (type | AUTO) ID ('=' expr)? ';'
+    : type ID (ASSIGN expr)? SEMI        // explicit type
+    | AUTO ID (ASSIGN expr)? SEMI           // auto MUST have init
     ;
 
+/* ---- Function ---- */
+
 funcDecl
-    : (returnType)? ID '(' paramList? ')' block
+    : returnType? ID LPAREN paramList? RPAREN block
     ;
 
 returnType
     : type
     | VOID
-    | AUTO
     ;
 
 paramList
-    : param (',' param)*
+    : param (COMMA param)*
     ;
 
 param
@@ -66,11 +78,13 @@ type
     : INT
     | FLOAT
     | STRING
-    | ID          // Struct type names
+    | ID
     ;
 
+/* ---- Block & Statements ---- */
+
 block
-    : '{' (varDecl | stmt)* '}'
+    : LBRACE (varDecl | stmt)* RBRACE
     ;
 
 stmt
@@ -87,7 +101,7 @@ stmt
     ;
 
 assignStmt
-    : lhs ASSIGN expr ';'
+    : lhs ASSIGN expr SEMI
     ;
 
 lhs
@@ -95,19 +109,20 @@ lhs
     ;
 
 ifStmt
-    : IF '(' expr ')' stmt (ELSE stmt)?
+    : IF LPAREN expr RPAREN stmt (ELSE stmt)?
     ;
 
 whileStmt
-    : WHILE '(' expr ')' stmt
+    : WHILE LPAREN expr RPAREN stmt
     ;
 
 forStmt
-    : FOR '(' forInit? ';' expr? ';' forUpdate? ')' stmt
+    : FOR LPAREN forInit? SEMI expr? SEMI forUpdate? RPAREN stmt
     ;
 
 forInit
-    : (type | AUTO) ID '=' expr 
+    : type ID ASSIGN expr
+    | AUTO ID ASSIGN expr
     | lhs ASSIGN expr
     ;
 
@@ -118,31 +133,31 @@ forUpdate
     ;
 
 switchStmt
-    : SWITCH '(' expr ')' '{' (switchCase | defaultCase)* '}'
+    : SWITCH LPAREN expr RPAREN LBRACE (switchCase | defaultCase)* RBRACE
     ;
 
 switchCase
-    : CASE (unaryExpr | INTLIT | ID) ':' (stmt | varDecl)*
+    : CASE (unaryExpr | INTLIT | ID) COLON (stmt | varDecl)*
     ;
 
 defaultCase
-    : DEFAULT ':' (stmt | varDecl)*
+    : DEFAULT COLON (stmt | varDecl)*
     ;
 
 breakStmt
-    : BREAK ';'
+    : BREAK SEMI
     ;
 
 continueStmt
-    : CONTINUE ';'
+    : CONTINUE SEMI
     ;
 
 returnStmt
-    : RETURN expr? ';'
+    : RETURN expr? SEMI
     ;
 
 exprStmt
-    : expr ';'
+    : expr SEMI
     ;
 
 /* =======================
@@ -191,11 +206,11 @@ postfixExpr
     ;
 
 funcCall
-    : '(' argList? ')'
+    : LPAREN argList? RPAREN
     ;
 
 argList
-    : expr (',' expr)*
+    : expr (COMMA expr)*
     ;
 
 memberAccess
@@ -207,19 +222,31 @@ primaryExpr
     | INTLIT
     | FLOATLIT
     | STRINGLIT
-    | '(' expr ')'
-    | '{' argList? '}' // Struct initialization
+    | LPAREN expr RPAREN
     ;
 
 /* =======================
    LEXER RULES
 ======================= */
 
+/* ---- Separators ---- */
+
+SEMI   : ';' ;
+COMMA  : ',' ;
+LPAREN : '(' ;
+RPAREN : ')' ;
+LBRACE : '{' ;
+RBRACE : '}' ;
+COLON  : ':' ;
+
+/* ---- Keywords ---- */
+
 INT      : 'int';
 FLOAT    : 'float';
 STRING   : 'string';
 AUTO     : 'auto';
 VOID     : 'void';
+
 BREAK    : 'break';
 CASE     : 'case';
 CONTINUE : 'continue';
@@ -232,6 +259,8 @@ STRUCT   : 'struct';
 SWITCH   : 'switch';
 WHILE    : 'while';
 
+/* ---- Operators ---- */
+
 EQ     : '==';
 NEQ    : '!=';
 LE     : '<=';
@@ -240,6 +269,7 @@ OR     : '||';
 AND    : '&&';
 INC    : '++';
 DEC    : '--';
+
 ASSIGN : '=';
 LT     : '<';
 GT     : '>';
@@ -251,15 +281,17 @@ MOD    : '%';
 NOT    : '!';
 DOT    : '.';
 
-INTLIT : [0-9]+;
+/* ---- Literals ---- */
+
 
 FLOATLIT
     : [0-9]+ '.' [0-9]* ([eE] [+-]? [0-9]+)?
     | '.' [0-9]+ ([eE] [+-]? [0-9]+)?
     | [0-9]+ [eE] [+-]? [0-9]+
     ;
+INTLIT :  [0-9]+ ;
 
-/* String rules defined in order of detection priority */
+/* ---- String ---- */
 
 ILLEGAL_ESCAPE
     : '"' ( ~["\\\r\n] | ESC_SEQ )* '\\' ~[btnfr"\\\r\n]
@@ -277,9 +309,14 @@ fragment ESC_SEQ
     : '\\' [btnfr"\\]
     ;
 
-ID : [a-zA-Z_][a-zA-Z_0-9]*;
+/* ---- Identifier ---- */
 
-LINE_COMMENT  : '//' ~[\r\n]* -> skip;
-BLOCK_COMMENT : '/*' .*? '*/' -> skip;
-WS : [ \t\f\r\n]+ -> skip;
-ERROR_CHAR : .;
+ID : [a-zA-Z_][a-zA-Z_0-9]* ;
+
+/* ---- Comments & WS ---- */
+
+LINE_COMMENT  : '//' ~[\r\n]* -> skip ;
+BLOCK_COMMENT : '/*' .*? '*/' -> skip ;
+WS : [ \t\f\r\n]+ -> skip ;
+
+ERROR_CHAR : . ;
