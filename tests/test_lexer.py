@@ -542,14 +542,113 @@ def test_special_char4():
     tokenize = Tokenizer(source)
     assert tokenize.get_tokens_as_string() == 'STRINGLIT,😀😃😄😁😆😅😂🤣😊😇,EOF'
 def test_leading_zeros():
-    source = '000123 000.456 0.007890000'
+    source = '00036 000.456 0.007890000'
     tokenize = Tokenizer(source)
-    assert tokenize.get_tokens_as_string() == 'INTLIT,000123,FLOATLIT,000.456,FLOATLIT,0.007890000,EOF'
+    assert tokenize.get_tokens_as_string() == 'INTLIT,00036,FLOATLIT,000.456,FLOATLIT,0.007890000,EOF'
 def test_mixed_comments():
     source = 'int x; /* block comment */ // line comment\n x = 5;'
     tokenize = Tokenizer(source)
     assert tokenize.get_tokens_as_string() == 'INT,int,ID,x,SEMI,;,ID,x,ASSIGN,=,INTLIT,5,SEMI,;,EOF'
-def test_error():
-    source = '"Unclosed string literal'
+def test_float():
+    source = '0.0 123.456 7.89e10 0.12E-3 .5 6.'
     tokenize = Tokenizer(source)
-    assert tokenize.get_tokens_as_string() == 'lexererr.UncloseString: Unclosed String: Unclosed string literal'
+    assert tokenize.get_tokens_as_string() == 'FLOATLIT,0.0,FLOATLIT,123.456,FLOATLIT,7.89e10,FLOATLIT,0.12E-3,FLOATLIT,.5,FLOATLIT,6.,EOF'
+
+# ---------- UNCLOSE STRING ----------
+
+def test_unclose_string_eof():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"hello').get_tokens_as_string()
+    assert "Unclosed String: hello" in str(e.value)
+
+def test_unclose_string_newline():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"hello\nworld"').get_tokens_as_string()
+    assert "Unclosed String: hello" in str(e.value)
+
+def test_unclose_string_carriage_return():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"hello\rworld"').get_tokens_as_string()
+    assert "Unclosed String: hello" in str(e.value)
+
+def test_unclose_string_after_escape():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"abc\\nxyz').get_tokens_as_string()
+    assert "Unclosed String: abc\\nxyz" in str(e.value)
+
+
+# ---------- ILLEGAL ESCAPE ----------
+
+def test_illegal_escape_simple():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"\\y"').get_tokens_as_string()
+    assert "Illegal Escape In String: \\y" in str(e.value)
+
+def test_illegal_escape_after_valid():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"ok\\n\\t\\y"').get_tokens_as_string()
+    assert "Illegal Escape In String: ok\\n\\t\\y" in str(e.value)
+
+def test_illegal_escape_mid_string():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"abc\\qxyz"').get_tokens_as_string()
+    assert "Illegal Escape In String: abc\\q" in str(e.value)
+def test_36_4():
+    source = "hello: \"hello\""
+    tokenize = Tokenizer(source)
+    assert tokenize.get_tokens_as_string() == 'ID,hello,COLON,:,STRINGLIT,hello,EOF'
+def test_invalid_escape():
+    input ='"hello \\a bbc'
+    with pytest.raises(Exception) as e:
+        Tokenizer(input).get_tokens_as_string()
+    assert "Illegal Escape In String: hello \\a" in str(e.value)
+def test_invalid_escape_2():
+    input ='"hello \\x world"'
+    with pytest.raises(Exception) as e:
+        Tokenizer(input).get_tokens_as_string()
+    assert "Illegal Escape In String: hello \\x" in str(e.value)
+def test_prefix():
+    source = 'prefix++ ++suffix --prefix suffix--'
+    tokenize = Tokenizer(source)
+    assert tokenize.get_tokens_as_string() == 'ID,prefix,INC,++,INC,++,ID,suffix,DEC,--,ID,prefix,ID,suffix,DEC,--,EOF'
+def test_prefix_2():
+    source = "Point.x++"
+    tokenize = Tokenizer(source)
+    assert tokenize.get_tokens_as_string() == 'ID,Point,DOT,.,ID,x,INC,++,EOF'
+def test_multiple():
+    source ="int x,y,z =10"
+    tokenize = Tokenizer(source)
+    assert tokenize.get_tokens_as_string() == 'INT,int,ID,x,COMMA,,,ID,y,COMMA,,,ID,z,ASSIGN,=,INTLIT,10,EOF'
+def test_multiple_2():
+    source = "a = b = c"
+    tokenize = Tokenizer(source)
+    assert tokenize.get_tokens_as_string() == 'ID,a,ASSIGN,=,ID,b,ASSIGN,=,ID,c,EOF'
+def test_string_all_valid_escapes():
+    result = Tokenizer('"\\b\\f\\r\\n\\t\\\\"').get_tokens_as_string()
+    assert result == "STRINGLIT,\b\f\r\n\t\\,EOF"
+def test_string_quote_escape():
+    result = Tokenizer('"say \\"hello\\""').get_tokens_as_string()
+    assert result == 'STRINGLIT,say "hello",EOF'
+def test_illegal_escape_at_end():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"abc\\y"').get_tokens_as_string()
+    assert "Illegal Escape In String: abc\\y" in str(e.value)
+def test_illegal_escape_after_many_valid():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"\\n\\t\\r\\q"').get_tokens_as_string()
+    assert "Illegal Escape In String: \\n\\t\\r\\q" in str(e.value)
+def test_illegal_escape_before_newline():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"abc\\q\nxyz"').get_tokens_as_string()
+    assert "Illegal Escape In String: abc\\q" in str(e.value)
+def test_unclose_due_to_newline_only():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"abc\nxyz"').get_tokens_as_string()
+    assert "Unclosed String: abc" in str(e.value)
+def test_empty_string():
+    result = Tokenizer('""').get_tokens_as_string()
+    assert result == "STRINGLIT,,EOF"
+def test_unclose_backslash_at_end():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"abc\\').get_tokens_as_string()
+    assert "Unclosed String: abc\\" in str(e.value)

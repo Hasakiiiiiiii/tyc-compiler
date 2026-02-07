@@ -40,13 +40,16 @@ program
 
 decl
     : varDecl
+    | mainDecl
     | funcDecl
     | structDecl
     ;
 
 structDecl
-    : STRUCT ID LBRACE varDecl* RBRACE SEMI
+    : STRUCT ID LBRACE structVar* RBRACE SEMI
     ;
+structVar
+    : type ID SEMI;
 
 /* ---- Variable ---- */
 
@@ -56,15 +59,18 @@ varDecl
     ;
 
 /* ---- Function ---- */
+mainDecl
+    : VOID MAIN LPAREN RPAREN block
+    ;
 
 funcDecl
     : returnType? ID LPAREN paramList? RPAREN block
     ;
-
 returnType
     : type
     | VOID
     ;
+
 
 paramList
     : param (COMMA param)*
@@ -86,6 +92,7 @@ type
 block
     : LBRACE (varDecl | stmt)* RBRACE
     ;
+
 
 stmt
     : assignStmt
@@ -155,7 +162,9 @@ continueStmt
 returnStmt
     : RETURN expr? SEMI
     ;
-
+returnVoidStmt
+    : RETURN SEMI
+    ;
 exprStmt
     : expr SEMI
     ;
@@ -247,6 +256,7 @@ STRING   : 'string';
 AUTO     : 'auto';
 VOID     : 'void';
 
+MAIN     : 'main';
 BREAK    : 'break';
 CASE     : 'case';
 CONTINUE : 'continue';
