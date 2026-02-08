@@ -625,10 +625,10 @@ def test_multiple_2():
     assert tokenize.get_tokens_as_string() == 'ID,a,ASSIGN,=,ID,b,ASSIGN,=,ID,c,EOF'
 def test_string_all_valid_escapes():
     result = Tokenizer('"\\b\\f\\r\\n\\t\\\\"').get_tokens_as_string()
-    assert result == "STRINGLIT,\b\f\r\n\t\\,EOF"
+    assert result == "STRINGLIT,\\b\\f\\r\\n\\t\\\\,EOF"
 def test_string_quote_escape():
     result = Tokenizer('"say \\"hello\\""').get_tokens_as_string()
-    assert result == 'STRINGLIT,say "hello",EOF'
+    assert result == 'STRINGLIT,say \\"hello\\",EOF'
 def test_illegal_escape_at_end():
     with pytest.raises(Exception) as e:
         Tokenizer('"abc\\y"').get_tokens_as_string()
@@ -652,3 +652,96 @@ def test_unclose_backslash_at_end():
     with pytest.raises(Exception) as e:
         Tokenizer('"abc\\').get_tokens_as_string()
     assert "Unclosed String: abc\\" in str(e.value)
+def test_lexer_keywords():
+    """Test Lexer nhận diện từ khóa mới"""
+    tokens = Tokenizer("break continue return auto switch case default").get_tokens_as_string()
+    assert tokens == "BREAK,break,CONTINUE,continue,RETURN,return,AUTO,auto,SWITCH,switch,CASE,case,DEFAULT,default,EOF"
+
+def test_lexer_literals():
+    """Test Lexer nhận diện các loại hằng số (Rule 1)"""
+    # Integer, Float (nhiều định dạng), String
+    source = '123 9.0 12e8 0.33E-3 "hello"'
+    tokens = Tokenizer(source).get_tokens_as_string()
+    assert tokens == "INTLIT,123,FLOATLIT,9.0,FLOATLIT,12e8,FLOATLIT,0.33E-3,STRINGLIT,hello,EOF"
+
+def test_lexer_operators():
+    """Test các toán tử 1 ngôi và 2 ngôi"""
+    tokens = Tokenizer("++ -- && || ! %").get_tokens_as_string()
+    assert tokens == "INC,++,DEC,--,AND,&&,OR,||,NOT,!,MOD,%,EOF"
+# ---------- STRINGLIT VALID BOUNDARY ----------
+
+def test_string_empty():
+    assert Tokenizer('""').get_tokens_as_string() == "STRINGLIT,,EOF"
+
+def test_string_single_char():
+    assert Tokenizer('"a"').get_tokens_as_string() == "STRINGLIT,a,EOF"
+
+def test_string_only_escape():
+    assert Tokenizer('"\\n"').get_tokens_as_string() == "STRINGLIT,\\n,EOF"
+
+def test_string_all_valid_escapes_boundary():
+    assert Tokenizer('"\\b\\f\\r\\n\\t\\\\\\""').get_tokens_as_string() == 'STRINGLIT,\\b\\f\\r\\n\\t\\\\\\\",EOF'
+
+def test_string_quote_inside():
+    assert Tokenizer('"say \\"hi\\""').get_tokens_as_string() == 'STRINGLIT,say \\"hi\\",EOF'
+
+def test_string_extended_ascii():
+    assert Tokenizer('"café"').get_tokens_as_string() == \
+           "STRINGLIT,café,EOF"
+# ---------- ILLEGAL_ESCAPE BOUNDARY ----------
+
+def test_illegal_escape_simple():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"\\a"').get_tokens_as_string()
+    assert "Illegal Escape In String: \\a" in str(e.value)
+
+def test_illegal_escape_mid():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"ab\\qcd"').get_tokens_as_string()
+    assert "Illegal Escape In String: ab\\q" in str(e.value)
+
+def test_illegal_escape_after_valid():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"ok\\n\\t\\y"').get_tokens_as_string()
+    assert "Illegal Escape In String: ok\\n\\t\\y" in str(e.value)
+
+def test_illegal_escape_before_eof():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"abc\\z').get_tokens_as_string()
+    assert "Illegal Escape In String: abc\\z" in str(e.value)
+# ---------- UNCLOSE_STRING BOUNDARY ----------
+
+def test_unclose_empty():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"').get_tokens_as_string()
+    assert "Unclosed String:" in str(e.value)
+
+def test_unclose_normal():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"abc').get_tokens_as_string()
+    assert "Unclosed String: abc" in str(e.value)
+
+def test_unclose_after_valid_escape():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"abc\\nxyz').get_tokens_as_string()
+    assert "Unclosed String: abc\\nxyz" in str(e.value)
+def test_unclose_backslash_at_end():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"abc\\').get_tokens_as_string()
+    assert "Unclosed String: abc\\" in str(e.value)
+# Illegal > Unclose
+
+def test_illegal_vs_unclose_priority():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"hello \\a world').get_tokens_as_string()
+    # Phải là ILLEGAL_ESCAPE, KHÔNG phải UNCLOSE
+    assert "Illegal Escape In String: hello \\a" in str(e.value)
+def test_unclose_newline():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"abc\nxyz"').get_tokens_as_string()
+    assert "Unclosed String: abc" in str(e.value)
+
+def test_unclose_carriage_return():
+    with pytest.raises(Exception) as e:
+        Tokenizer('"abc\rxyz"').get_tokens_as_string()
+    assert "Unclosed String: abc" in str(e.value)

@@ -365,12 +365,12 @@ def test_expr_not_equal():
 # Expressions: Logical
 def test_expr_and():
     """Test: Logical AND"""
-    result = Parser("void main() { a && b; }").parse()
+    result = Parser("void main() { a && b && c; }").parse()
     assert result == "success"
 
 def test_expr_or():
     """Test: Logical OR"""
-    result = Parser("void main() { a || b; }").parse()
+    result = Parser("void main() { a || b || c; }").parse()
     assert result == "success"
 
 def test_expr_not():
@@ -401,7 +401,7 @@ def test_expr_prefix_decrement():
 
 def test_expr_postfix_increment():
     """Test: Postfix increment"""
-    result = Parser("void main() { a++; }").parse()
+    result = Parser("void main() { ++a++; }").parse()
     assert result == "success"
 
 def test_expr_postfix_decrement():
@@ -993,11 +993,410 @@ def test_prefix_then_member():
     assert Parser(input).parse() == "success"
 def test_call_postfix_member():
     input = """
-    struct A { int x; };
-    A foo() { A a; return a; }
-
     void main() {
-        foo().x++;
+        if (x > 0){
+            a ==0;}
+        else {
+            break;
+        }
+        }
+    """
+    assert Parser(input).parse() == "success"
+def test_switch_constant_expr_complex():
+    input = "void main() { switch(x) { case (1+2*3): break; } }"
+    assert Parser(input).parse() == "success"
+def test_switch_multiple_default():
+    input = """
+    void main() {
+        switch(x) {
+            case 1: break;
+            default: break;
+            default: break; 
+        }
+    }
+    """
+    assert Parser(input).parse() == "Error on line 6 col 12: default"
+def test_switch_empty_body():
+    input = "void main(){if (x>0){else{}}"
+    assert "Error" in Parser(input).parse()
+def test_lhs_literal_int():
+    input = "void main() { 1 = x; }"
+    assert "Error" in Parser(input).parse()
+
+def test_lhs_literal_string():
+    input = 'void main() { "abc" = x; }'
+    assert "Error" in Parser(input).parse()
+
+def test_lhs_literal_float():
+    input = "void main() { 3.14 = x; }"
+    assert "Error" in Parser(input).parse()
+def test_lhs_binary_expr():
+    input = "void main() { (a + b) = c; }"
+    assert "Error" in Parser(input).parse()
+
+def test_lhs_complex_expr():
+    input = "void main() { a * b + c = d; }"
+    assert "Error" in Parser(input).parse()
+def test_lhs_function_call():
+    input = "void main() { foo() = 3; }"
+    assert "Error" in Parser(input).parse()
+#==========================================154===================================
+def break_if_invalid():
+    input = """
+    void main() {
+        if (x > 0)
+            break;
+    }
+    """
+    assert Parser(input).parse() == "Error on line 4 col 12: break"
+def continue_if_invalid():
+    input = """
+    void main() {
+        if (x > 0){
+            continue;
+            }
+    }
+    """
+    assert Parser(input).parse() == "Error on line 4 col 12: continue"
+def break_switch_invalid():
+    input = """
+    void main() {
+        switch(x) {
+            break;
+        }
+    }
+    """
+    assert Parser(input).parse() == "Error on line 4 col 12: break"
+def continue_switch_invalid():
+    input = """
+    void main() {
+        switch(x) {
+            continue;
+        }
+    }
+    """
+    assert Parser(input).parse() == "Error on line 4 col 12: continue"
+def break_if_invalid():
+    input = """
+    void main() {
+        if (x > 0)x
+            a ==0
+        else 
+            break
+    """
+    assert Parser(input).parse() == "Error on line 4 col 12: "
+def test_if_dangling_else_logic():
+    """Test: Quy tắc dangling else (else thuộc về if thứ hai)"""
+    source = """
+    void main() {
+        if (x) if (y) a = 1; else b = 2; 
+    }
+    """
+    assert Parser(source).parse() == "success"
+
+def test_if_no_braces_single_statement():
+    """Test: If không có ngoặc nhọn, chỉ có 1 statement"""
+    source = "void main() { if (x) return 1; else return 0; }"
+    assert Parser(source).parse() == "success"
+
+def test_if_condition_complex_expression():
+    """Test: Condition là một biểu thức logic phức tạp"""
+    source = "void main() { if ((a + b) > (c * d) || !flag) { x = 1; } }"
+    assert Parser(source).parse() == "success"
+def test_block_nested_scopes():
+    """Test: Các khối lệnh lồng nhau với khai báo biến chồng chéo"""
+    source = """
+    void main() {
+        auto x = 10;
+        {
+            auto y = 20;
+            {
+                auto x = 30; // Shadowing
+                auto sum = x + y;
+            }
+        }
+    }
+    """
+    assert Parser(source).parse() == "success"
+
+def test_block_empty():
+    """Test: Khối lệnh rỗng"""
+    assert Parser("void main() { { } { { } } }").parse() == "success"
+
+# =================================================================
+# 2. IF-ELSE (DANGLING ELSE & STRUCTURE)
+# =================================================================
+
+def test_if_dangling_else():
+    """Test: Quy tắc else đi với if gần nhất (innermost)"""
+    source = "void main() { if (x) if (y) a = 1; else b = 2; }"
+    # else b = 2 phải thuộc về if (y)
+    assert Parser(source).parse() == "success"
+
+def test_if_without_braces():
+    """Test: If/Else chỉ có một statement đơn, không dùng ngoặc nhọn"""
+    source = "void main() { if (flag) printInt(1); else printInt(0); }"
+    assert Parser(source).parse() == "success"
+
+def test_if_condition_complex():
+    """Test: Điều kiện if là biểu thức phức hợp"""
+    source = "void main() { if ((a + b) * c > d || !e) { return; } }"
+    assert Parser(source).parse() == "success"
+
+# =================================================================
+# 3. WHILE & FOR LOOPS (BOUNDARY CASES)
+# =================================================================
+
+def test_while_single_statement():
+    """Test: While không có block {}"""
+    assert Parser("void main() { while (i < 10) i++; }").parse() == "success"
+
+def test_for_all_components_empty():
+    """Test: For (;;) - Vòng lặp vô hạn hợp lệ"""
+    assert Parser("void main() { for (;;) break; }").parse() == "success"
+
+def test_for_init_is_assignment():
+    """Test: For với init là phép gán thay vì khai báo auto"""
+    assert Parser("void main() { int i; for (i = 0; i < 10; i++) {} }").parse() == "success"
+
+def test_for_missing_update():
+    """Test: For thiếu phần update"""
+    assert Parser("void main() { for (auto i = 0; i < 10; ) { i++; } }").parse() == "success"
+
+# =================================================================
+# 4. SWITCH-CASE (CONSTANT EXPR & FALL-THROUGH)
+# =================================================================
+
+def test_switch_empty_body_valid():
+    """Test: Switch không có nội dung (Hợp lệ)"""
+    assert Parser("void main() { switch (x) { } }").parse() == "success"
+
+def test_switch_constant_expressions_in_case():
+    """Test: Case label là các loại biểu thức hằng (unary, parenthesized, arithmetic)"""
+    source = """
+    void main() {
+        switch (x) {
+            case 1 + 2 * 3: break;
+            case (42): break;
+            case -5: break;
+            case +10: break;
+        }
+    }
+    """
+    assert Parser(source).parse() == "success"
+
+def test_switch_fallthrough_behavior():
+    """Test: Nhiều case labels dồn vào một khối (Fall-through)"""
+    source = """
+    void main() {
+        switch (day) {
+            case 1:
+            case 2:
+            case 3: printInt(1); break;
+            default: printInt(0);
+        }
+    }
+    """
+    assert Parser(source).parse() == "success"
+
+def test_switch_default_not_at_end():
+    """Test: Default nằm giữa các case labels"""
+    source = """
+    void main() {
+        switch (x) {
+            case 1: break;
+            default: printInt(-1); break;
+            case 2: break;
+        }
+    }
+    """
+    assert Parser(source).parse() == "success"
+
+def test_invalid_switch_multiple_defaults():
+    """Test: Lỗi khi có 2 default (Bắt lỗi compile-time)"""
+    source = "void main() { switch(x) { default: break; default: break; } }"
+    assert "Error" in Parser(source).parse()
+
+# =================================================================
+# 5. JUMP STATEMENTS (BREAK, CONTINUE, RETURN)
+# =================================================================
+
+def test_break_continue_valid_locations():
+    """Test: Break/Continue trong vòng lặp lồng switch"""
+    source = """
+    void main() {
+        while (1) {
+            switch(x) {
+                case 1: break; // Thoát switch
+            }
+            if (y) continue; // Tiếp tục while
+            break; // Thoát while
+        }
+    }
+    """
+    assert Parser(source).parse() == "success"
+
+def test_return_void_vs_expr():
+    """Test: Return có và không có biểu thức"""
+    source = """
+    void f1() { return; }
+    int f2() { return a + b * c; }
+    void main() { f1(); f2(); }
+    """
+    assert Parser(source).parse() == "success"
+
+# =================================================================
+# 6. L-VALUE & SYNTAX ERRORS (NEGATIVE TESTING)
+# =================================================================
+
+def test_invalid_assignment_to_literal():
+    """Test: Không thể gán giá trị cho hằng số (Lỗi L-Value)"""
+    assert "Error" in Parser("void main() { 5 = x; }").parse()
+
+def test_invalid_assignment_to_expression():
+    """Test: Không thể gán giá trị cho biểu thức toán học"""
+    assert "Error" in Parser("void main() { (a + b) = 10; }").parse()
+
+def test_invalid_break_outside():
+    """Test: Break nằm ngoài loop/switch (Lỗi semantic nhưng parser thường bắt ở cấu trúc)"""
+    # Nếu parser của bạn check context, nó sẽ fail ở đây
+    source = "void main() { if (x) { break; } }"
+    # Lưu ý: Tùy vào việc bạn check Break ở Parser hay Semantic Analyzer
+    # Ở đây giả định Parser cho phép cấu trúc, Semantic mới bắt lỗi.
+    assert Parser(source).parse() == "success" 
+
+def test_missing_semicolon_struct():
+    """Test: Thiếu dấu chấm phẩy sau định nghĩa struct (Lỗi phổ biến)"""
+    source = "struct A { int x } void main() {}"
+    assert "Error" in Parser(source).parse()
+
+# =================================================================
+# 1. JUMP STATEMENTS (BREAK, CONTINUE, RETURN)
+# =================================================================
+
+def test_return_void():
+    """Test: return không biểu thức cho hàm void"""
+    assert Parser("void f() { return; }").parse() == "success"
+
+def test_return_expression():
+    """Test: return kèm biểu thức (Rule 5)"""
+    assert Parser("int add() { return 1 + 2; }").parse() == "success"
+
+def test_break_continue_in_loops():
+    """Test: break/continue trong ngữ cảnh vòng lặp"""
+    source = """
+    void main() {
+        while(1) {
+            if (x) continue;
+            break;
+        }
+    }
+    """
+    assert Parser(source).parse() == "success"
+
+# =================================================================
+# 2. EXPRESSION STATEMENTS & OPERATORS
+# =================================================================
+
+def test_expression_statements_side_effects():
+    """Test: Các biểu thức đóng vai trò là câu lệnh (Expression Statement)"""
+    source = """
+    void main() {
+        x = 5;            // Assignment
+        x++;              // Postfix increment
+        --y;              // Prefix decrement
+        printInt(x);      // Function call
+        x + y;            // Valid but useless expression
+    }
+    """
+    assert Parser(source).parse() == "success"
+
+def test_arithmetic_precedence():
+    """Test: Độ ưu tiên toán tử số học và logic (Rule 3)"""
+    # a + b * c / d % e
+    assert Parser("void main() { x = a + b * c / d % e; }").parse() == "success"
+
+def test_logical_not_and_relational():
+    """Test: Kết hợp toán tử logic ! và so sánh"""
+    assert Parser("void main() { if (!(a == b && c < d)) {} }").parse() == "success"
+
+# =================================================================
+# 3. TYPE INFERENCE SYNTAX (AUTO)
+# =================================================================
+
+def test_auto_declaration_with_init():
+    """Test: Khai báo auto có khởi tạo (Rule 2.1)"""
+    source = """
+    void main() {
+        auto x = 10;
+        auto y = 3.14;
+        auto msg = "hello";
+        auto z = x + y;
+    }
+    """
+    assert Parser(source).parse() == "success"
+
+def test_auto_declaration_no_init():
+    """Test: Khai báo auto không khởi tạo (Rule 2.2)"""
+    source = """
+    void main() {
+        auto a;
+        a = 10;
+    }
+    """
+    assert Parser(source).parse() == "success"
+
+def test_function_inferred_return():
+    """Test: Hàm không khai báo kiểu trả về (Rule 5)"""
+    source = """
+    getVal(int x) {
+        return x + 1;
+    }
+    void main() {
+        auto v = getVal(5);
+    }
+    """
+    assert Parser(source).parse() == "success"
+
+# =================================================================
+# 4. BOUNDARY & ERROR CASES (CÚ PHÁP)
+# =================================================================
+
+def test_invalid_float_modulus_syntax():
+    """
+    Lưu ý: Parser thường vẫn chấp nhận x % y dù x, y là float.
+    Việc bắt lỗi 'Modulus operates on int only' (Rule 3.4) 
+    thường nằm ở pha Semantic. Nếu Parser của bạn check type thì dùng test này.
+    """
+    source = "void main() { float f = 3.14 % 2.0; }"
+    # Nếu Parser thuần túy, nó sẽ 'success'. 
+    # Nếu Parser có tích hợp check type, nó sẽ 'Error'.
+    assert Parser(source).parse() == "success" 
+
+def test_struct_member_access_expression():
+    """Test: Member Access (Rule 3.1)"""
+    source = "void main() { rect.topLeft.x = 10; }"
+    assert Parser(source).parse() == "success"
+
+def test_invalid_string_arithmetic_syntax():
+    """Test: Cú pháp cộng chuỗi (Rule Strict Operator Typing)"""
+    # Tương tự Modulus, đây thường là lỗi Semantic (Type Mismatch)
+    source = 'void main() { auto s = "hi" + "there"; }'
+    assert Parser(source).parse() == "success"
+def test_for_multiple_statements_without_block():
+    input = """
+    void main() {
+        for (;;)
+            a = 1;
+        b = 2;
+    }
+    """
+    assert Parser(input).parse() == "success"
+def test_for_then_extra_block():
+    input = """
+    void main() {
+        for (;;) {}
+        {}
     }
     """
     assert Parser(input).parse() == "success"

@@ -141,8 +141,10 @@ forUpdate
     ;
 
 switchStmt
-    : SWITCH LPAREN expr RPAREN LBRACE switchCase*  defaultCase? RBRACE
+    : SWITCH LPAREN expr RPAREN 
+      LBRACE switchCase* defaultCase? switchCase* RBRACE
     ;
+
 
 switchCase
     : CASE expr COLON (stmt | varDecl)*
@@ -317,7 +319,11 @@ ILLEGAL_ESCAPE
     ;
 
 UNCLOSE_STRING
-    : '"' ( ~["\\\r\n] | ESC_SEQ )* ([\r\n] | EOF)
+    : '"' ( ~["\\\r\n] | ESC_SEQ )*
+      ( '\\' EOF
+      | [\r\n]
+      | EOF
+      )
     ;
 
 STRINGLIT
